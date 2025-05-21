@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Daily Work Tracker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            overscroll-behavior-y: contain; /* Prevents pull-to-refresh on mobile when scrolling modals */
+        }
+        .modal {
+            display: none; /* Hidden by default */
+        }
+        .modal.flex {
+            display: flex;
+        }
+        /* Custom scrollbar for task list */
+        #taskListContainer::-webkit-scrollbar {
+            width: 8px;
+        }
+        #taskListContainer::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 10px;
+        }
+        #taskListContainer::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 10px;
+        }
+        #taskListContainer::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+        /* Ensure buttons are easily tappable */
+        button, input[type="submit"], input[type="button"] {
+            padding: 0.75rem 1.5rem; /* Tailwind p-3 px-6 equivalent */
+            cursor: pointer;
+        }
+        .task-item {
+            transition: background-color 0.3s ease;
+        }
+        .task-item:hover {
+            background-color: #f9fafb; /* Tailwind gray-50 */
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen flex flex-col items-center pt-4 pb-8 px-4">
+
+    <div class="bg-white p-4 sm:p-6 md:p-8 rounded-xl shadow-2xl w-full max-w-3xl">
+        <header class="mb-6 text-center">
+            <h1 class="text-3xl sm:text-4xl font-bold text-blue-600">Daily Work Tracker</h1>
+            <p class="text-sm text-gray-500 mt-1">User ID: <span id="userIdDisplay" class="font-mono">loading...</span></p>
+        </header>
+
+        <div id="messageArea" class="mb-4 text-center"></div>
+
+        <form id="taskForm" class="mb-8 p-6 bg-blue-50 rounded-lg shadow">
+            <h2 class="text-2xl font-semibold text-blue-700 mb-4">Add New Task</h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                    <label for="taskName" class="block text-sm font-medium text-gray-700 mb-1">Task Name</label>
+                    <input type="text" id="taskName" name="taskName" required class="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                </div>
+                <div>
+                    <label for="taskDate" class="block text-sm font-medium text-gray-700 mb-1">Date</label>
+                    <input type="date" id="taskDate" name="taskDate" required class="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                </div>
+                <div>
+                    <label for="startTime" class="block text-sm font-medium text-gray-700 mb-1">Start Time</label>
+                    <input type="time" id="startTime" name="startTime" required class="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                </div>
+                <div>
+                    <label for="endTime" class="block text-sm font-medium text-gray-700 mb-1">End Time</label>
+                    <input type="time" id="endTime" name="endTime" required class="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                </div>
+            </div>
+            <div class="mt-4">
+                <label for="taskDescription" class="block text-sm font-medium text-gray-700 mb-1">Description (Optional)</label>
+                <textarea id="taskDescription" name="taskDescription" rows="3" class="w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500"></textarea>
+            </div>
+            <div class="mt-6 text-center">
+                <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-6 rounded-lg shadow-md transition duration-150 ease-in-out">
+                    Add Task
+                </button>
+            </div>
+        </form>
+
+        <div class="mb-6 p-4 bg-green-50 rounded-lg shadow">
+            <div class="flex flex-col sm:flex-row justify-between items-center mb-2">
+                <h2 class="text-xl font-semibold text-green-700">Daily Summary</h2>
+                <input type="date" id="summaryDate" class="p-2 border border-gray-300 rounded-md shadow-sm focus:ring-green-500 focus:border-green-500 mt-2 sm:mt-0">
+            </div>
+            <p class="text-green-600">Total duration for <span id="selectedSummaryDate" class="font-bold">today</span>: <strong id="totalDurationDisplay" class="text-lg">0h 0m</strong></p>
+        </div>
+        
+        <div>
+            <h2 class="text-2xl font-semibold text-gray-800 mb-4">Tracked Tasks</h2>
+            <div id="taskListContainer" class="bg-gray-50 p-1 rounded-lg shadow max-h-[50vh] sm:max-h-[60vh] overflow-y-auto">
+                <ul id="taskList" class="space-y-3 p-3">
+                    <li id="noTasksMessage" class="text-center text-gray-500 py-4">No tasks tracked yet. Add one above!</li>
+                </ul>
+            </div>
+             <div id="loadingIndicator" class="text-center py-4 text-blue-500 font-semibold" style="display: none;">Loading tasks...</div>
+        </div>
+
+        <footer class="mt-8 text-center">
+            <p class="text-sm text-gray-500">
+                &copy; <span id="currentYear"></span> Daily Work Tracker.
+            </p>
+        </footer>
+    </div>
+
+    <div id="editTaskModal" class="modal fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full flex items-center justify-center p-4">
+        <div class="bg-white p-6 sm:p-8 rounded-lg shadow-xl w-full max-w-lg">
+            <h2 class="text-2xl font-semibold text-blue-700 mb-6">Edit Task</h2>
+            <form id="editTaskForm">
+                <input type="hidden" id="editTaskId">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label for="editTaskName" class="block text-sm font-medium text-gray-700 mb-1">Task Name</label>
+                        <input type="text" id="editTaskName" required class="w-full p-2 border border-gray-300 rounded-md shadow-sm">
+                    </div>
+                    <div>
+                        <label for="editTaskDate" class="block text-sm font-medium text-gray-700 mb-1">Date</label>
+                        <input type="date" id="editTaskDate" required class="w-full p-2 border border-gray-300 rounded-md shadow-sm">
+                    </div>
+                    <div>
+                        <label for="editStartTime" class="block text-sm font-medium text-gray-700 mb-1">Start Time</label>
+                        <input type="time" id="editStartTime" required class="w-full p-2 border border-gray-300 rounded-md shadow-sm">
+                    </div>
+                    <div>
+                        <label for="editEndTime" class="block text-sm font-medium text-gray-700 mb-1">End Time</label>
+                        <input type="time" id="editEndTime" required class="w-full p-2 border border-gray-300 rounded-md shadow-sm">
+                    </div>
+                </div>
+                <div class="mt-4">
+                    <label for="editTaskDescription" class="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                    <textarea id="editTaskDescription" rows="3" class="w-full p-2 border border-gray-300 rounded-md shadow-sm"></textarea>
+                </div>
+                <div class="mt-6 flex justify-end space-x-3">
+                    <button type="button" id="cancelEdit" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-semibold py-2 px-4 rounded-lg shadow-md">Cancel</button>
+                    <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg shadow-md">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="deleteConfirmModal" class="modal fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full flex items-center justify-center p-4">
+        <div class="bg-white p-6 rounded-lg shadow-xl w-full max-w-sm text-center">
+            <h2 class="text-xl font-semibold text-red-700 mb-4">Confirm Deletion</h2>
+            <p class="text-gray-700 mb-6">Are you sure you want to delete this task? This action cannot be undone.</p>
+            <div class="flex justify-center space-x-3">
+                <button type="button" id="cancelDelete" class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-semibold py-2 px-4 rounded-lg shadow-md">Cancel</button>
+                <button type="button" id="confirmDeleteButton" class="bg-red-600 hover:bg-red-700 text-white font-semibold py-2 px-4 rounded-lg shadow-md">Delete</button>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        // Firebase Imports
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { 
+            getAuth, 
+            signInAnonymously, 
+            signInWithCustomToken, 
+            onAuthStateChanged 
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { 
+            getFirestore, 
+            collection, 
+            addDoc, 
+            doc, 
+            getDoc, 
+            getDocs, 
+            setDoc, 
+            updateDoc, 
+            deleteDoc, 
+            onSnapshot, 
+            query, 
+            where, 
+            Timestamp,
+            // orderBy // Removed orderBy from here as we will sort client-side
+        } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // --- Firebase Configuration and Initialization ---
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
+            // Fallback config if __firebase_config is not defined (should not happen in Canvas)
+            apiKey: "YOUR_FALLBACK_API_KEY",
+            authDomain: "YOUR_FALLBACK_AUTH_DOMAIN",
+            projectId: "YOUR_FALLBACK_PROJECT_ID",
+            storageBucket: "YOUR_FALLBACK_STORAGE_BUCKET",
+            messagingSenderId: "YOUR_FALLBACK_MESSAGING_SENDER_ID",
+            appId: "YOUR_FALLBACK_APP_ID"
+        };
+        
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-work-tracker';
+
+        let app;
+        let db;
+        let auth;
+        let currentUserId = null; // Will be set after authentication
+        let tasksCollectionRef; // Will be initialized after userId is available
+
+        // --- DOM Elements ---
+        const taskForm = document.getElementById('taskForm');
+        const taskList = document.getElementById('taskList');
+        const noTasksMessage = document.getElementById('noTasksMessage');
+        const loadingIndicator = document.getElementById('loadingIndicator');
+        const userIdDisplay = document.getElementById('userIdDisplay');
+        const messageArea = document.getElementById('messageArea');
+
+        // Edit Modal Elements
+        const editTaskModal = document.getElementById('editTaskModal');
+        const editTaskForm = document.getElementById('editTaskForm');
+        const cancelEditButton = document.getElementById('cancelEdit');
+
+        // Delete Modal Elements
+        const deleteConfirmModal = document.getElementById('deleteConfirmModal');
+        const cancelDeleteButton = document.getElementById('cancelDelete');
+        const confirmDeleteButton = document.getElementById('confirmDeleteButton');
+        let taskToDeleteId = null;
+
+        // Daily Summary Elements
+        const summaryDateInput = document.getElementById('summaryDate');
+        const selectedSummaryDateSpan = document.getElementById('selectedSummaryDate');
+        const totalDurationDisplay = document.getElementById('totalDurationDisplay');
+
+        // --- Helper Functions ---
+        function showMessage(message, type = 'success', duration = 3000) {
+            messageArea.textContent = message;
+            messageArea.className = `mb-4 text-center p-3 rounded-md text-sm ${
+                type === 'success' ? 'bg-green-100 text-green-700' : 
+                type === 'error' ? 'bg-red-100 text-red-700' : 
+                'bg-blue-100 text-blue-700'
+            }`;
+            if (duration) {
+                setTimeout(() => {
+                    messageArea.textContent = '';
+                    messageArea.className = 'mb-4 text-center';
+                }, duration);
+            }
+        }
+
+        function formatTime(hours, minutes) {
+            return `${hours}h ${minutes}m`;
+        }
+
+        function calculateDuration(startTimeStr, endTimeStr) {
+            if (!startTimeStr || !endTimeStr) return { totalMinutes: 0, formatted: "0h 0m" };
+            const [startH, startM] = startTimeStr.split(':').map(Number);
+            const [endH, endM] = endTimeStr.split(':').map(Number);
+
+            const startDate = new Date(0, 0, 0, startH, startM);
+            let endDate = new Date(0, 0, 0, endH, endM);
+
+            if (endDate < startDate) { // Handles overnight tasks or crossing midnight
+                endDate.setDate(endDate.getDate() + 1);
+            }
+            
+            let diffMillis = endDate - startDate;
+            if (diffMillis < 0) diffMillis = 0; // Should not happen with the above logic but as a safeguard
+
+            const totalMinutes = Math.floor(diffMillis / 60000);
+            const hours = Math.floor(totalMinutes / 60);
+            const minutes = totalMinutes % 60;
+            return { totalMinutes, formatted: formatTime(hours, minutes) };
+        }
+        
+        function setTodayDate(dateInputElement) {
+            const today = new Date();
+            const year = today.getFullYear();
+            const month = String(today.getMonth() + 1).padStart(2, '0');
+            const day = String(today.getDate()).padStart(2, '0');
+            dateInputElement.value = `${year}-${month}-${day}`;
+        }
+
+        // --- Firestore Functions ---
+        async function initializeFirebaseServices() {
+            try {
+                app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+                // import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js"; // If you need to re-enable
+                // setLogLevel('debug'); // Optional: for detailed Firestore logs
+
+                onAuthStateChanged(auth, async (user) => {
+                    if (user) {
+                        currentUserId = user.uid;
+                        userIdDisplay.textContent = currentUserId;
+                        tasksCollectionRef = collection(db, `artifacts/${appId}/users/${currentUserId}/work_tasks`);
+                        loadTasks();
+                        updateDailySummary(); // Initial summary for today
+                    } else {
+                        // Try to sign in with custom token if available, otherwise sign in anonymously
+                        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                            console.log("Attempting to sign in with custom token...");
+                            try {
+                                await signInWithCustomToken(auth, __initial_auth_token);
+                                console.log("Successfully signed in with custom token.");
+                            } catch (error) {
+                                console.error("Error signing in with custom token, falling back to anonymous:", error);
+                                await signInAnonymously(auth);
+                                console.log("Signed in anonymously after custom token failure.");
+                            }
+                        } else {
+                            console.log("No custom token, signing in anonymously...");
+                            await signInAnonymously(auth);
+                            console.log("Signed in anonymously.");
+                        }
+                    }
+                });
+            } catch (error) {
+                console.error("Firebase initialization error:", error);
+                showMessage("Error initializing the app. Please refresh.", "error", 0);
+                userIdDisplay.textContent = "Error";
+            }
+        }
+        
+        async function addTask(event) {
+            event.preventDefault();
+            if (!currentUserId || !tasksCollectionRef) {
+                showMessage("User not authenticated or database not ready.", "error");
+                return;
+            }
+
+            const taskName = taskForm.taskName.value.trim();
+            const taskDescription = taskForm.taskDescription.value.trim();
+            const taskDate = taskForm.taskDate.value;
+            const startTime = taskForm.startTime.value;
+            const endTime = taskForm.endTime.value;
+
+            if (!taskName || !taskDate || !startTime || !endTime) {
+                showMessage("Please fill in all required fields (Task Name, Date, Start Time, End Time).", "error");
+                return;
+            }
+            
+            const duration = calculateDuration(startTime, endTime);
+            if (duration.totalMinutes <= 0 && startTime !== endTime) { // Allow 0 duration if start and end are same (e.g. quick log)
+                 if (new Date(`1970-01-01T${endTime}:00`) < new Date(`1970-01-01T${startTime}:00`)) {
+                    // This specific message might be confusing if the duration calculation already handles overnight.
+                    // The core issue is just that end time is before start time on the same day.
+                    showMessage("End time must be after start time on the same day. For overnight tasks, the app calculates duration correctly.", "error");
+                 } else {
+                    showMessage("End time must be after start time.", "error");
+                 }
+                return;
+            }
+
+
+            try {
+                const newTask = {
+                    name: taskName,
+                    description: taskDescription,
+                    date: taskDate, // Store as YYYY-MM-DD string
+                    startTime: startTime, // Store as HH:MM string
+                    endTime: endTime, // Store as HH:MM string
+                    durationMinutes: duration.totalMinutes,
+                    createdAt: Timestamp.now()
+                };
+                await addDoc(tasksCollectionRef, newTask);
+                showMessage("Task added successfully!", "success");
+                taskForm.reset();
+                setTodayDate(taskForm.taskDate); // Reset date to today after adding
+            } catch (error) {
+                console.error("Error adding task:", error);
+                showMessage("Error adding task. Please try again.", "error");
+            }
+        }
+
+        function renderTask(task) {
+            const li = document.createElement('li');
+            li.dataset.id = task.id;
+            li.className = "task-item bg-white p-4 rounded-lg shadow-md border border-gray-200";
+
+            const duration = calculateDuration(task.startTime, task.endTime);
+
+            li.innerHTML = `
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-2">
+                    <h3 class="text-lg font-semibold text-blue-700">${task.name}</h3>
+                    <span class="text-sm text-gray-500 mt-1 sm:mt-0">${new Date(task.date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })}</span>
+                </div>
+                ${task.description ? `<p class="text-sm text-gray-600 mb-2 whitespace-pre-wrap">${task.description}</p>` : ''}
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center text-sm text-gray-600 mb-3">
+                    <span>Time: ${task.startTime} - ${task.endTime}</span>
+                    <span class="font-medium text-indigo-600 mt-1 sm:mt-0">Duration: ${duration.formatted}</span>
+                </div>
+                <div class="flex justify-end space-x-2 mt-2">
+                    <button data-action="edit" class="text-sm bg-yellow-400 hover:bg-yellow-500 text-white font-semibold py-1 px-3 rounded-md shadow transition duration-150">Edit</button>
+                    <button data-action="delete" class="text-sm bg-red-500 hover:bg-red-600 text-white font-semibold py-1 px-3 rounded-md shadow transition duration-150">Delete</button>
+                </div>
+            `;
+            return li;
+        }
+
+        function loadTasks() {
+            if (!currentUserId || !tasksCollectionRef) return;
+
+            loadingIndicator.style.display = 'block';
+            noTasksMessage.style.display = 'none';
+            
+            // Query all tasks without server-side ordering
+            const q = query(tasksCollectionRef);
+
+            onSnapshot(q, (snapshot) => {
+                taskList.innerHTML = ''; // Clear existing tasks
+                
+                const fetchedTasks = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
+
+                // Sort tasks client-side: by date (desc), then by startTime (asc)
+                fetchedTasks.sort((a, b) => {
+                    const dateComparison = b.date.localeCompare(a.date); // Descending date
+                    if (dateComparison !== 0) {
+                        return dateComparison;
+                    }
+                    return a.startTime.localeCompare(b.startTime); // Ascending startTime for same date
+                });
+
+                if (fetchedTasks.length === 0) {
+                    noTasksMessage.style.display = 'block';
+                } else {
+                    noTasksMessage.style.display = 'none';
+                    fetchedTasks.forEach(taskData => {
+                        const taskElement = renderTask(taskData);
+                        taskList.appendChild(taskElement);
+                    });
+                }
+                loadingIndicator.style.display = 'none';
+                updateDailySummary(); // Update summary whenever tasks change
+            }, (error) => {
+                console.error("Error loading tasks:", error);
+                showMessage(`Error loading tasks: ${error.message}. Please check your connection or Firebase setup.`, "error", 5000);
+                loadingIndicator.style.display = 'none';
+                noTasksMessage.style.display = 'block';
+                noTasksMessage.textContent = 'Error loading tasks.';
+            });
+        }
+        
+        async function openEditModal(taskId) {
+            try {
+                const taskDocRef = doc(tasksCollectionRef, taskId);
+                const docSnap = await getDoc(taskDocRef);
+                if (docSnap.exists()) {
+                    const task = docSnap.data();
+                    document.getElementById('editTaskId').value = taskId;
+                    document.getElementById('editTaskName').value = task.name;
+                    document.getElementById('editTaskDescription').value = task.description || '';
+                    document.getElementById('editTaskDate').value = task.date;
+                    document.getElementById('editStartTime').value = task.startTime;
+                    document.getElementById('editEndTime').value = task.endTime;
+                    editTaskModal.classList.add('flex');
+                } else {
+                    showMessage("Task not found.", "error");
+                }
+            } catch (error) {
+                console.error("Error fetching task for edit:", error);
+                showMessage("Error fetching task details.", "error");
+            }
+        }
+
+        async function handleUpdateTask(event) {
+            event.preventDefault();
+            const taskId = document.getElementById('editTaskId').value;
+            const taskName = document.getElementById('editTaskName').value.trim();
+            const taskDescription = document.getElementById('editTaskDescription').value.trim();
+            const taskDate = document.getElementById('editTaskDate').value;
+            const startTime = document.getElementById('editStartTime').value;
+            const endTime = document.getElementById('editEndTime').value;
+
+            if (!taskName || !taskDate || !startTime || !endTime) {
+                showMessage("Please fill in all required fields in the edit form.", "error");
+                return;
+            }
+
+            const duration = calculateDuration(startTime, endTime);
+             if (duration.totalMinutes <= 0 && startTime !== endTime) {
+                 if (new Date(`1970-01-01T${endTime}:00`) < new Date(`1970-01-01T${startTime}:00`)) {
+                     showMessage("End time must be after start time on the same day. For overnight tasks, the app calculates duration correctly.", "error");
+                 } else {
+                    showMessage("End time must be after start time.", "error");
+                 }
+                return;
+            }
+
+            try {
+                const taskDocRef = doc(tasksCollectionRef, taskId);
+                await updateDoc(taskDocRef, {
+                    name: taskName,
+                    description: taskDescription,
+                    date: taskDate,
+                    startTime: startTime,
+                    endTime: endTime,
+                    durationMinutes: duration.totalMinutes
+                });
+                showMessage("Task updated successfully!", "success");
+                editTaskModal.classList.remove('flex');
+            } catch (error) {
+                console.error("Error updating task:", error);
+                showMessage("Error updating task. Please try again.", "error");
+            }
+        }
+
+        function openDeleteConfirmModal(taskId) {
+            taskToDeleteId = taskId;
+            deleteConfirmModal.classList.add('flex');
+        }
+
+        async function handleDeleteTask() {
+            if (!taskToDeleteId) return;
+            try {
+                const taskDocRef = doc(tasksCollectionRef, taskToDeleteId);
+                await deleteDoc(taskDocRef);
+                showMessage("Task deleted successfully!", "success");
+            } catch (error)
+                {
+                console.error("Error deleting task:", error);
+                showMessage("Error deleting task. Please try again.", "error");
+            } finally {
+                taskToDeleteId = null;
+                deleteConfirmModal.classList.remove('flex');
+            }
+        }
+        
+        async function updateDailySummary() {
+            if (!currentUserId || !tasksCollectionRef) return;
+
+            const selectedDate = summaryDateInput.value;
+            if (!selectedDate) return;
+
+            selectedSummaryDateSpan.textContent = new Date(selectedDate + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
+
+            try {
+                const q = query(tasksCollectionRef, where("date", "==", selectedDate));
+                const querySnapshot = await getDocs(q);
+                
+                let totalMinutesForDay = 0;
+                querySnapshot.forEach((docSnap) => {
+                    totalMinutesForDay += docSnap.data().durationMinutes || 0;
+                });
+
+                const hours = Math.floor(totalMinutesForDay / 60);
+                const minutes = totalMinutesForDay % 60;
+                totalDurationDisplay.textContent = formatTime(hours, minutes);
+
+            } catch (error) {
+                console.error("Error calculating daily summary:", error);
+                showMessage("Error updating daily summary.", "error");
+                totalDurationDisplay.textContent = "Error";
+            }
+        }
+
+
+        // --- Event Listeners ---
+        taskForm.addEventListener('submit', addTask);
+        
+        taskList.addEventListener('click', (event) => {
+            const action = event.target.dataset.action;
+            const taskElement = event.target.closest('li');
+            if (!taskElement) return;
+            const taskId = taskElement.dataset.id;
+
+            if (action === 'edit') {
+                openEditModal(taskId);
+            } else if (action === 'delete') {
+                openDeleteConfirmModal(taskId);
+            }
+        });
+
+        editTaskForm.addEventListener('submit', handleUpdateTask);
+        cancelEditButton.addEventListener('click', () => editTaskModal.classList.remove('flex'));
+        
+        confirmDeleteButton.addEventListener('click', handleDeleteTask);
+        cancelDeleteButton.addEventListener('click', () => deleteConfirmModal.classList.remove('flex'));
+
+        summaryDateInput.addEventListener('change', updateDailySummary);
+
+        // Close modals if clicked outside content
+        [editTaskModal, deleteConfirmModal].forEach(modal => {
+            modal.addEventListener('click', (event) => {
+                if (event.target === modal) { // Check if the click is on the modal backdrop itself
+                    modal.classList.remove('flex');
+                }
+            });
+        });
+        
+        // --- Initialization ---
+        document.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('currentYear').textContent = new Date().getFullYear();
+            setTodayDate(taskForm.taskDate); // Set default date for new tasks
+            setTodayDate(summaryDateInput); // Set default date for summary
+            initializeFirebaseServices();
+        });
+
+    </script>
+</body>
+</html>
